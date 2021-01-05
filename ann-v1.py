@@ -5,12 +5,11 @@ def create_net(input, shape):
     for layer in shape:
         l = []
         for _ in range(layer):
-            l.append(np.random.uniform(-1, 1, input))
+            l.append(np.random.rand(input))
         l = np.array(l)
         net.append(l)
         input = layer
     return net
-
 
 from abc import ABC, abstractmethod
 
@@ -55,8 +54,8 @@ class MSE(function):
 
 class network:
 
-    def __init__(self, input, hidden, activiation, cost):
-
+    def __init__(self, input, hidden, activiation, cost, lr=0.01):
+        self.lr = lr
         self.net = create_net(input=input, shape = hidden)
         self.a = activiation()
         self.c = cost()
@@ -76,18 +75,21 @@ class network:
         return x
 
 
-
     def backprop(self, x, y):
-        debug = True
+        """
+        Gross Backprop Implementation
+        :param x:
+        :param y:
+        :return: weights
+        """
+        init = x
         A= []
         dA = []
         Z = [x]
         gradient_w = []
         for i, _ in enumerate(self.net):
-
             z = []
             for j in range(len(self.net[i])):
-
                 z.append(np.dot(x, self.net[i][j]))
             z = np.array(z)
             Z.append(z)
@@ -100,24 +102,27 @@ class network:
         output_error = np.multiply(self.c.f(y_e, y), dA[-1])
         A.insert(0,np.vectorize(self.a.f)(x))
         i = len(self.net) - 1
-
         while i >= 0:
-            print(i)
-            print(output_error.shape)
-            print("n")
-            print(self.net[i].T.shape)
-            print(dA[i].shape)
+            if i == 0:
+                dA[i] = init
             gradient_w.append(output_error)
             output_error = np.multiply(
                 np.matmul(self.net[i].T, output_error),
                 dA[i]
             )
             i -= 1
-
         gradient_w.append(output_error)
         return list(reversed(gradient_w))
 
+    def update(self, weights):
+        for i in range(len(self.net)):
+            for j in range(len(self.net[i])):
+                self.net[i][j] -= self.lr*weights[i][j]
 
+    def grad_descent(self, train_x, trainy):
+        for x, y in zip(training_x, training_y):
+            w = self.backprop(x, y)
+            self.update(w)
 
 if __name__ == "__main__":
     input_sz = 784
@@ -128,10 +133,8 @@ if __name__ == "__main__":
     #print(training_y.shape)
     net = network(
         input=input_sz,
-        hidden= [100, 30, 10],
+        hidden= [700, 100, 30, 10],
         activiation=logistic,
         cost=MSE)
     #print(net.feedforward(training_x[0]))
-    w = net.backprop(training_x[0], training_y[0])
-    #for l in w:
-        #print(l.shape)
+    net.grad_descent(training_x, training_y)
