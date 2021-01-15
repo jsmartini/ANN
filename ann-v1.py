@@ -81,8 +81,8 @@ class nn:
         nb = list(nb)
         nw = list(nw)
         for i in range(len(self.net_w)):
-            self.net_w[i] = (self.net_w[i].T - self.l r *nw[i]).T
-            self.net_b[i] = self.net_b[i] - self.l r *nb[i]
+            self.net_w[i] = (self.net_w[i].T - self.lr *nw[i]).T
+            self.net_b[i] = self.net_b[i] - self.lr *nb[i]
 
     def mini_batch_update(self, x_set, y_set, b_size):
         # chunks dataset into subsets
@@ -115,8 +115,8 @@ class nn:
                 for k in list(n.keys())[0x1:]:
                     dw += n[k][lk][0x0]
                     db += n[k][lk][0x1]
-                nw.insert(0x0, d w /len(network_keys))
-                nb.insert(0x0, d b /len(network_keys))
+                nw.insert(0x0, dw /len(network_keys))
+                nb.insert(0x0, db /len(network_keys))
             self.update(reversed(nw), reversed(nb))
             print \
                 (f"training loss {np.array(self.training_cost).sum() / len(self.training_cost)} \t dataset chunk iteration {i}")
