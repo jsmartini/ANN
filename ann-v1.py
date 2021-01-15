@@ -1,140 +1,166 @@
+
 import numpy as np
+import logging
+import json
+from progress.bar import Bar
 
-def create_net(input, shape):
-    net = []
-    for layer in shape:
-        l = []
-        for _ in range(layer):
-            l.append(np.random.rand(input))
-        l = np.array(l)
-        net.append(l)
-        input = layer
-    return net
+# sigmoid activation
+sigmoid = {
+    "f": lambda z: np.exp(-z) / (1 + np.exp(-z)),
+    "df": lambda z: -np.exp(-z) / (1 + np.exp(-z)) ** 2,
+    "df_quick": lambda a: a * (1 - a)  # easy
+}
+# MSE cost
+cost = {
+    "f": lambda y, yp: 0.5 * (y - yp) ** 2,
+    "df": lambda y, yp: y - yp
+}
 
-from abc import ABC, abstractmethod
+class nn:
 
-class function(ABC):
+    """
+        set-backs: only use one activation for all layers
+    """
 
-    def __init__(self, name):
-        self.name = name
+    lr = 0.01
+    training_cost = []
+    testing_cost = []
 
-    @abstractmethod
-    def f(self, z):
-        pass
+    def __init__(self, input, output, hidden :list):
 
-    @abstractmethod
-    def df(self, z):
-        pass
+        self.net_w = list()
+        self.net_b = list()
+        hidden.append(output)
+        next = input
+        # generates an array of arrays to for the weights
+        for hsize in hidden:
+            self.net_b.append(np.random.random())
+            self.net_w.append(np.array([np.random.random(next) for _ in range(hsize)]))
+            next = hsize
+        print()
 
-    def __str__(self):
-        return self.name
+    def get_network(self):
+        network = dict()
+        for i in enumerate(self.net_w):
+            network[f"layer {i[0x0]}"] = {
+                "hidden units": i[0x1].shape[0x0],
+                "weight length/unit": i[0x1].shape[0x1]
+            }
+        return json.dumps(
+            network, indent=4
+        )
 
-class logistic(function):
-
-    def __init__(self):
-        super().__init__("logistic")
-
-    def f(self, z):
-        return 1/(1+np.exp(-z))
-
-    def df(self, z):
-        return (-np.exp(-z))/((1+np.exp(-z))**2)
-
-class MSE(function):
-
-    def __init__(self):
-        super().__init__("Mean Square Error")
-
-    def f(self, y, yp):
-        return 0.5 * np.abs(y - yp)**2
-
-    def df(self, y, yp):
-        return np.abs(y - yp)**2
-
-
-class network:
-
-    def __init__(self, input, hidden, activiation, cost, lr=0.01):
-        self.lr = lr
-        self.net = create_net(input=input, shape = hidden)
-        self.a = activiation()
-        self.c = cost()
-
-    def feedforward(self, x):
-        a = np.full(shape=(self.net[1].shape[0], len(x)), fill_value=x)
-        #print(a.shape)
-        #print(self.net[0].shape)
-#        return np.dot(a, self.net[0].T)
-
-        for i in range(len(self.net)):
-            z = []
-            for j in range(len(self.net[i])):
-                z.append(np.dot(x, self.net[i][j]))
-            x = np.vectorize(self.a.f)(z)
-            print(x.shape)
+    def feed(self, x, f = sigmoid["f"], df = sigmoid["df_quick"], backprop = False):
+        A, dA = [], []
+        for layer_w, layer_b in zip(self.net_w, self.net_b):
+            z = np.dot(layer_w, x) + layer_b
+            a = f(z)
+            if backprop:
+                A.append(a)
+                dA.append(df(a))
+            x = a
+        if backprop: return x, A, dA
         return x
 
-
     def backprop(self, x, y):
-        """
-        Gross Backprop Implementation
-        :param x:
-        :param y:
-        :return: weights
-        """
-        init = x
-        A= []
-        dA = []
-        Z = [x]
-        gradient_w = []
-        for i, _ in enumerate(self.net):
-            z = []
-            for j in range(len(self.net[i])):
-                z.append(np.dot(x, self.net[i][j]))
-            z = np.array(z)
-            Z.append(z)
-            A.append(np.vectorize(self.a.f)(z))
-            dA.append(np.vectorize(self.a.df)(z))
-            del z
-            x = A[i]
-        dA.insert(0, np.vectorize(self.a.df)(x))
-        y_e = x
-        output_error = np.multiply(self.c.f(y_e, y), dA[-1])
-        A.insert(0,np.vectorize(self.a.f)(x))
-        i = len(self.net) - 1
-        while i >= 0:
-            if i == 0:
-                dA[i] = init
-            gradient_w.append(output_error)
-            output_error = np.multiply(
-                np.matmul(self.net[i].T, output_error),
-                dA[i]
-            )
-            i -= 1
-        gradient_w.append(output_error)
-        return list(reversed(gradient_w))
+        y_out, A, dA = self.feed(x, backprop=True)
+        e0 = cost["df"](y_out, y)
+        self.training_cost.append(cost["f"](y_out, y))
+        error = [e0]
+        nabla_w = [y_out * e0]  # output layer weights
+        nabla_b = [e0]  # output layer bias
+        for i in reversed(range(1, len(self.net_w))):
+            temp1 = np.matmul(self.net_w[i].T, error[-0x1])
+            temp2 = np.multiply(temp1, dA[ i -0x1])
+            error.append(temp2)
+            nabla_w.insert(0x0, A[ i -0x1 ] *error[-0x1])
+            nabla_b.insert(0x0, error[-0x1])
+        return nabla_w, nabla_b
 
-    def update(self, weights):
-        for i in range(len(self.net)):
-            for j in range(len(self.net[i])):
-                self.net[i][j] -= self.lr*weights[i][j]
+    def update(self, nw, nb):
+        nb = list(nb)
+        nw = list(nw)
+        for i in range(len(self.net_w)):
+            self.net_w[i] = (self.net_w[i].T - self.l r *nw[i]).T
+            self.net_b[i] = self.net_b[i] - self.l r *nb[i]
 
-    def grad_descent(self, train_x, trainy):
-        for x, y in zip(training_x, training_y):
-            w = self.backprop(x, y)
-            self.update(w)
+    def mini_batch_update(self, x_set, y_set, b_size):
+        # chunks dataset into subsets
+        chunker = lambda dset,  c: [dset[i: i +c] for i in range(0x0, len(dset), c)]
+        # chunks (list of features, list of labels) for each chunk // divides the dataset in tuples lists of x,y pairs
+        data_chunks = [(cx, cy) for cx, cy in zip(chunker(x_set, b_size), chunker(y_set, b_size))]
+        iterations = len(data_chunks)
+        bar = Bar("Processing", max=iterations)
+        for i in range(iterations):
+            bar.next()
+            dataset = data_chunks[i]
+            n = {}
+            cnt = 0x0
+            for x, y in zip(dataset[0x0], dataset[0x1]):
+                n[cnt] = {}
+                nabla_w, nabla_b = self.backprop(x, y)
+                for j in range(len(nabla_w)):
+                    n[cnt][j] = (nabla_w[j], nabla_b[j])
+                cnt += 0x1
+            network_keys = n[0x0].keys()
+            # lk -> layer keys
+            # dw -> gradient for w
+            # k -> network iteration key // per example gradient
+            nw = []  # nabla weights
+            nb = []  # nabla bias
+            # adds up all weights in same layers for the entire chunk of data and updates with avg dw
+            for lk in network_keys:
+                dw = n[0x0][lk][0x0]
+                db = n[0x0][lk][0x1]
+                for k in list(n.keys())[0x1:]:
+                    dw += n[k][lk][0x0]
+                    db += n[k][lk][0x1]
+                nw.insert(0x0, d w /len(network_keys))
+                nb.insert(0x0, d b /len(network_keys))
+            self.update(reversed(nw), reversed(nb))
+            print \
+                (f"training loss {np.array(self.training_cost).sum() / len(self.training_cost)} \t dataset chunk iteration {i}")
+            self.training_cost = []
+        bar.finish()
 
 if __name__ == "__main__":
-    input_sz = 784
+    """
+    testing network functionality: making sure loss changes with each epoch -- indicative of changing weights and biases
+    """
+    np.random.seed(1)
+    # logging.basicConfig(filemode="w", filename="sandbox_nn.py.log", level=logging.INFO)
+    input_sz = 100
     output_sz = 10
-    training_x = np.random.random(size=(100, input_sz))
-    training_y = np.random.random(size=(100, output_sz))
-    #print(training_x.shape)
-    #print(training_y.shape)
-    net = network(
+    hidden = [300, 500, 40]
+    net = nn(
         input=input_sz,
-        hidden= [700, 100, 30, 10],
-        activiation=logistic,
-        cost=MSE)
-    #print(net.feedforward(training_x[0]))
-    net.grad_descent(training_x, training_y)
+        output=output_sz,
+        hidden=hidden
+    )
+    net.lr = 0.0001
+    def gen_random_data(amt, input, output):
+        x = [np.random.random(input) for _ in range(amt)]
+        y = [np.random.random(output) for _ in range(amt)]
+        return x, y
+
+    print(net.get_network())
+    def pause(msg):
+        val = True
+        while val:
+            d = input("= " *(int(len(msg ) *1.5)) + f"\n{msg} \t(y/yes/n/no)\n "+ "= " *(int(len(msg ) *1.5) ) +"\n>>>")
+            if d.upper() == "Y" or d.upper() == "yes".upper():
+                val = False
+            elif d.upper() == "N" or d.upper() == "no".upper():
+                print("BYE!")
+                exit(0)
+            else:
+                print("INVALID OPTION")
+                continue
+
+    pause("CONTINUE to mini batch random data test?")
+    tx, ty = gen_random_data(1000, input_sz, output_sz)
+    epochs = 100
+    for i in range(epochs):
+        print(f"Epoch {i}\t " + "= " *10)
+        net.mini_batch_update(tx, ty, 64)
+        pause(f"CONTINUE testing epoch { i +1} of {epochs}?")
